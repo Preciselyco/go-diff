@@ -15,7 +15,6 @@ import (
 	"html"
 	"math"
 	"net/url"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -723,18 +722,9 @@ func (dmp *DiffMatchPatch) DiffCleanupSemantic(diffs []Diff) []Diff {
 	return diffs
 }
 
-// Define some regex patterns for matching boundaries.
-var (
-	nonAlphaNumericRegex = regexp.MustCompile(`[^a-zA-Z0-9]`)
-	whitespaceRegex      = regexp.MustCompile(`\s`)
-	linebreakRegex       = regexp.MustCompile(`[\r\n]`)
-	blanklineEndRegex    = regexp.MustCompile(`\n\r?\n$`)
-	blanklineStartRegex  = regexp.MustCompile(`^\r?\n\r?\n`)
-)
-
 // diffCleanupSemanticScore computes a score representing whether the internal boundary falls on logical boundaries.
 // Scores range from 6 (best) to 0 (worst). Closure, but does not reference any external variables.
-func diffCleanupSemanticScore(one, two string) int {
+func (dmp *DiffMatchPatch) diffCleanupSemanticScore(one, two string) int {
 	if len(one) == 0 || len(two) == 0 {
 		// Edges are the best.
 		return 6
@@ -743,17 +733,15 @@ func diffCleanupSemanticScore(one, two string) int {
 	// Each port of this function behaves slightly differently due to subtle differences in each language's definition of things like 'whitespace'.  Since this function's purpose is largely cosmetic, the choice has been made to use each language's native features rather than force total conformity.
 	rune1, _ := utf8.DecodeLastRuneInString(one)
 	rune2, _ := utf8.DecodeRuneInString(two)
-	char1 := string(rune1)
-	char2 := string(rune2)
 
-	nonAlphaNumeric1 := nonAlphaNumericRegex.MatchString(char1)
-	nonAlphaNumeric2 := nonAlphaNumericRegex.MatchString(char2)
-	whitespace1 := nonAlphaNumeric1 && whitespaceRegex.MatchString(char1)
-	whitespace2 := nonAlphaNumeric2 && whitespaceRegex.MatchString(char2)
-	lineBreak1 := whitespace1 && linebreakRegex.MatchString(char1)
-	lineBreak2 := whitespace2 && linebreakRegex.MatchString(char2)
-	blankLine1 := lineBreak1 && blanklineEndRegex.MatchString(one)
-	blankLine2 := lineBreak2 && blanklineEndRegex.MatchString(two)
+	nonAlphaNumeric1 := !dmp.TextClassifier.IsAlphanumeric(rune1)
+	nonAlphaNumeric2 := !dmp.TextClassifier.IsAlphanumeric(rune2)
+	whitespace1 := nonAlphaNumeric1 && dmp.TextClassifier.IsWhitespace(rune1)
+	whitespace2 := nonAlphaNumeric2 && dmp.TextClassifier.IsWhitespace(rune2)
+	lineBreak1 := whitespace1 && dmp.TextClassifier.IsLinebreak(rune1)
+	lineBreak2 := whitespace2 && dmp.TextClassifier.IsLinebreak(rune2)
+	blankLine1 := lineBreak1 && dmp.TextClassifier.EndsWithBlankLine(one)
+	blankLine2 := lineBreak2 && dmp.TextClassifier.BeginsWithBlankLine(two)
 
 	if blankLine1 || blankLine2 {
 		// Five points for blank lines.
@@ -802,8 +790,7 @@ func (dmp *DiffMatchPatch) DiffCleanupSemanticLossless(diffs []Diff) []Diff {
 			bestEquality1 := equality1
 			bestEdit := edit
 			bestEquality2 := equality2
-			bestScore := diffCleanupSemanticScore(equality1, edit) +
-				diffCleanupSemanticScore(edit, equality2)
+			bestScore := dmp.diffCleanupSemanticScore(equality1, edit) + dmp.diffCleanupSemanticScore(edit, equality2)
 
 			for len(edit) != 0 && len(equality2) != 0 {
 				_, sz := utf8.DecodeRuneInString(edit)
@@ -813,8 +800,7 @@ func (dmp *DiffMatchPatch) DiffCleanupSemanticLossless(diffs []Diff) []Diff {
 				equality1 += edit[:sz]
 				edit = edit[sz:] + equality2[:sz]
 				equality2 = equality2[sz:]
-				score := diffCleanupSemanticScore(equality1, edit) +
-					diffCleanupSemanticScore(edit, equality2)
+				score := dmp.diffCleanupSemanticScore(equality1, edit) + dmp.diffCleanupSemanticScore(edit, equality2)
 				// The >= encourages trailing rather than leading whitespace on edits.
 				if score >= bestScore {
 					bestScore = score
