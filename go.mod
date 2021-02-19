@@ -1,6 +1,7 @@
 module github.com/Preciselyco/go-diff
 
 require (
+	github.com/alecthomas/kong v0.2.15
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/kr/pretty v0.1.0 // indirect
 	github.com/stretchr/testify v1.4.0
