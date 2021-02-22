@@ -29,6 +29,8 @@ type DiffMatchPatch struct {
 	MatchMaxBits int
 	// At what point is no match declared (0.0 = perfection, 1.0 = very loose).
 	MatchThreshold float64
+	// Interface object that interprets text.
+	TextClassifier TextClassifier
 }
 
 // New creates a new DiffMatchPatch object with default parameters.
@@ -42,5 +44,6 @@ func New() *DiffMatchPatch {
 		PatchDeleteThreshold: 0.5,
 		PatchMargin:          4,
 		MatchMaxBits:         32,
+		TextClassifier:       NewUnicodeTextClassifier(),
 	}
 }
